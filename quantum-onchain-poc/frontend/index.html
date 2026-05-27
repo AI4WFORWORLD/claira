@@ -1,0 +1,1200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Quantum | Institutional FNFT Transparency Terminal</title>
+  <meta name="description" content="100% On-Chain RWA Financial Transparency Dashboard — Quantum FNFT Institutional Proof of Concept on Base Sepolia" />
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <!-- Ethers.js v6 CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.1/ethers.umd.min.js"></script>
+
+  <style>
+    /* ========================================================================
+       DESIGN TOKENS
+       ======================================================================== */
+    :root {
+      /* Core palette — institutional slate + accent cyan */
+      --bg-primary: #0a0e17;
+      --bg-secondary: #111827;
+      --bg-card: rgba(17, 24, 39, 0.65);
+      --bg-card-hover: rgba(22, 32, 55, 0.80);
+      --bg-glass: rgba(15, 23, 42, 0.55);
+      --border-subtle: rgba(100, 116, 139, 0.18);
+      --border-active: rgba(56, 189, 248, 0.35);
+
+      --text-primary: #f1f5f9;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+
+      --accent-cyan: #38bdf8;
+      --accent-cyan-dim: rgba(56, 189, 248, 0.15);
+      --accent-emerald: #34d399;
+      --accent-emerald-dim: rgba(52, 211, 153, 0.12);
+      --accent-amber: #fbbf24;
+      --accent-amber-dim: rgba(251, 191, 36, 0.12);
+      --accent-violet: #a78bfa;
+      --accent-violet-dim: rgba(167, 139, 250, 0.12);
+      --accent-rose: #fb7185;
+      --accent-rose-dim: rgba(251, 113, 133, 0.12);
+
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --error: #ef4444;
+
+      --radius-sm: 8px;
+      --radius-md: 12px;
+      --radius-lg: 16px;
+      --radius-xl: 20px;
+
+      --shadow-card: 0 4px 32px rgba(0, 0, 0, 0.35), 0 0 0 1px var(--border-subtle);
+      --shadow-glow-cyan: 0 0 40px rgba(56, 189, 248, 0.08);
+      --shadow-glow-emerald: 0 0 40px rgba(52, 211, 153, 0.06);
+
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+
+      --transition-base: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+      --transition-spring: 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    /* ========================================================================
+       RESET & BASE
+       ======================================================================== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html {
+      font-size: 16px;
+      scroll-behavior: smooth;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      overflow-x: hidden;
+      position: relative;
+    }
+
+    /* Ambient glow background */
+    body::before {
+      content: '';
+      position: fixed;
+      top: -50%;
+      left: -20%;
+      width: 70%;
+      height: 70%;
+      background: radial-gradient(ellipse at center, rgba(56, 189, 248, 0.04) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+    body::after {
+      content: '';
+      position: fixed;
+      bottom: -40%;
+      right: -15%;
+      width: 60%;
+      height: 60%;
+      background: radial-gradient(ellipse at center, rgba(167, 139, 250, 0.03) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ========================================================================
+       GRID BACKGROUND PATTERN
+       ======================================================================== */
+    .grid-bg {
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(56, 189, 248, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(56, 189, 248, 0.03) 1px, transparent 1px);
+      background-size: 60px 60px;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* ========================================================================
+       LAYOUT
+       ======================================================================== */
+    .app-container {
+      position: relative;
+      z-index: 1;
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 32px 24px 80px;
+    }
+
+    /* ========================================================================
+       HEADER / TOP BAR
+       ======================================================================== */
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 24px;
+      background: var(--bg-glass);
+      backdrop-filter: blur(20px) saturate(1.4);
+      -webkit-backdrop-filter: blur(20px) saturate(1.4);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      margin-bottom: 32px;
+      box-shadow: var(--shadow-card);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .brand-icon {
+      width: 42px;
+      height: 42px;
+      border-radius: var(--radius-sm);
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-violet));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      font-weight: 800;
+      color: #fff;
+      letter-spacing: -1px;
+      box-shadow: 0 0 24px rgba(56, 189, 248, 0.25);
+    }
+
+    .brand-text h1 {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+      background: linear-gradient(135deg, var(--text-primary) 40%, var(--accent-cyan));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .brand-text span {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-muted);
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+    }
+
+    .network-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      background: var(--accent-cyan-dim);
+      border: 1px solid rgba(56, 189, 248, 0.20);
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent-cyan);
+      letter-spacing: 0.3px;
+    }
+
+    .network-badge .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent-cyan);
+      animation: pulse-dot 2s ease-in-out infinite;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(56, 189, 248, 0.5); }
+      50% { opacity: 0.7; box-shadow: 0 0 0 6px rgba(56, 189, 248, 0); }
+    }
+
+    /* ========================================================================
+       SECTION HEADERS
+       ======================================================================== */
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .section-header .icon-box {
+      width: 36px;
+      height: 36px;
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      flex-shrink: 0;
+    }
+
+    .section-header h2 {
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -0.2px;
+    }
+
+    .section-header .tag {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      padding: 4px 10px;
+      border-radius: 999px;
+      margin-left: auto;
+    }
+
+    /* ========================================================================
+       CARDS
+       ======================================================================== */
+    .card {
+      background: var(--bg-card);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 28px;
+      box-shadow: var(--shadow-card);
+      transition: border-color var(--transition-base), box-shadow var(--transition-base);
+    }
+
+    .card:hover {
+      border-color: var(--border-active);
+      box-shadow: var(--shadow-card), var(--shadow-glow-cyan);
+    }
+
+    /* ========================================================================
+       WALLET SECTION
+       ======================================================================== */
+    .wallet-section {
+      margin-bottom: 28px;
+    }
+
+    .wallet-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .wallet-info {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .wallet-avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-violet));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      box-shadow: 0 0 20px rgba(56, 189, 248, 0.2);
+    }
+
+    .wallet-details .label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 4px;
+    }
+
+    .wallet-details .address {
+      font-family: var(--font-mono);
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-primary);
+      letter-spacing: 0.2px;
+    }
+
+    .wallet-details .address.disconnected {
+      color: var(--text-muted);
+      font-style: italic;
+      font-family: var(--font-sans);
+    }
+
+    .status-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+
+    .status-chip.connected {
+      background: var(--accent-emerald-dim);
+      color: var(--accent-emerald);
+      border: 1px solid rgba(52, 211, 153, 0.2);
+    }
+
+    .status-chip.disconnected {
+      background: rgba(100, 116, 139, 0.1);
+      color: var(--text-muted);
+      border: 1px solid var(--border-subtle);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 24px;
+      border: none;
+      border-radius: var(--radius-md);
+      font-family: var(--font-sans);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all var(--transition-base);
+      letter-spacing: 0.2px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,0.1), transparent);
+      opacity: 0;
+      transition: opacity var(--transition-base);
+    }
+
+    .btn:hover::after { opacity: 1; }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #0ea5e9, #38bdf8);
+      color: #fff;
+      box-shadow: 0 4px 16px rgba(14, 165, 233, 0.3);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 24px rgba(14, 165, 233, 0.4);
+    }
+
+    .btn-primary:active { transform: translateY(0); }
+
+    .btn-secondary {
+      background: rgba(100, 116, 139, 0.12);
+      color: var(--text-secondary);
+      border: 1px solid var(--border-subtle);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(100, 116, 139, 0.2);
+      color: var(--text-primary);
+    }
+
+    .btn-query {
+      background: linear-gradient(135deg, #059669, #34d399);
+      color: #fff;
+      box-shadow: 0 4px 16px rgba(5, 150, 105, 0.3);
+    }
+
+    .btn-query:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 24px rgba(5, 150, 105, 0.4);
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+
+    /* ========================================================================
+       MAIN GRID
+       ======================================================================== */
+    .main-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-bottom: 28px;
+    }
+
+    @media (max-width: 860px) {
+      .main-grid { grid-template-columns: 1fr; }
+    }
+
+    /* ========================================================================
+       TOKEN METADATA TABLE
+       ======================================================================== */
+    .meta-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .meta-table tr {
+      border-bottom: 1px solid var(--border-subtle);
+      transition: background var(--transition-base);
+    }
+
+    .meta-table tr:last-child { border-bottom: none; }
+
+    .meta-table tr:hover { background: rgba(56, 189, 248, 0.03); }
+
+    .meta-table td {
+      padding: 14px 0;
+      font-size: 13px;
+    }
+
+    .meta-table .field-label {
+      color: var(--text-muted);
+      font-weight: 500;
+      width: 160px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+    }
+
+    .meta-table .field-value {
+      color: var(--text-primary);
+      font-weight: 500;
+      font-family: var(--font-mono);
+      font-size: 13px;
+    }
+
+    .meta-table .field-value.highlight {
+      color: var(--accent-cyan);
+    }
+
+    /* ========================================================================
+       FINANCIAL SNAPSHOT PANEL
+       ======================================================================== */
+    .financial-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 20px;
+    }
+
+    .metric-card {
+      padding: 20px;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-subtle);
+      background: rgba(15, 23, 42, 0.5);
+      transition: all var(--transition-base);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .metric-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      border-radius: 2px 2px 0 0;
+      opacity: 0;
+      transition: opacity var(--transition-base);
+    }
+
+    .metric-card:hover::before { opacity: 1; }
+    .metric-card:hover {
+      border-color: var(--border-active);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+    }
+
+    .metric-card.noi::before { background: var(--accent-cyan); }
+    .metric-card.occ::before { background: var(--accent-emerald); }
+    .metric-card.dscr::before { background: var(--accent-amber); }
+    .metric-card.cf::before { background: var(--accent-violet); }
+
+    .metric-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .metric-label .metric-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+    }
+
+    .metric-value {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -1px;
+      line-height: 1;
+      margin-bottom: 6px;
+    }
+
+    .metric-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .metric-card.noi .metric-value { color: var(--accent-cyan); }
+    .metric-card.noi .metric-dot { background: var(--accent-cyan); }
+    .metric-card.occ .metric-value { color: var(--accent-emerald); }
+    .metric-card.occ .metric-dot { background: var(--accent-emerald); }
+    .metric-card.dscr .metric-value { color: var(--accent-amber); }
+    .metric-card.dscr .metric-dot { background: var(--accent-amber); }
+    .metric-card.cf .metric-value { color: var(--accent-violet); }
+    .metric-card.cf .metric-dot { background: var(--accent-violet); }
+
+    /* ========================================================================
+       TIMESTAMP VERIFICATION STRIP
+       ======================================================================== */
+    .timestamp-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 20px;
+      padding: 14px 18px;
+      background: var(--accent-emerald-dim);
+      border: 1px solid rgba(52, 211, 153, 0.18);
+      border-radius: var(--radius-md);
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--accent-emerald);
+    }
+
+    .timestamp-bar .ts-icon {
+      font-size: 16px;
+    }
+
+    .timestamp-bar .ts-mono {
+      font-family: var(--font-mono);
+      font-weight: 600;
+    }
+
+    /* ========================================================================
+       EMPTY / LOADING STATES
+       ======================================================================== */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 48px 24px;
+      text-align: center;
+      gap: 12px;
+    }
+
+    .empty-state .empty-icon {
+      font-size: 40px;
+      opacity: 0.4;
+      margin-bottom: 4px;
+    }
+
+    .empty-state p {
+      color: var(--text-muted);
+      font-size: 13px;
+      max-width: 280px;
+      line-height: 1.6;
+    }
+
+    /* Skeleton loading animation */
+    .skeleton {
+      background: linear-gradient(90deg,
+        rgba(100, 116, 139, 0.08) 25%,
+        rgba(100, 116, 139, 0.15) 50%,
+        rgba(100, 116, 139, 0.08) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s ease-in-out infinite;
+      border-radius: var(--radius-sm);
+    }
+
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    .skeleton-line {
+      height: 16px;
+      margin-bottom: 12px;
+      width: 100%;
+    }
+
+    .skeleton-line.short { width: 60%; }
+    .skeleton-line.medium { width: 80%; }
+
+    /* ========================================================================
+       QUERY SECTION
+       ======================================================================== */
+    .query-section {
+      margin-bottom: 28px;
+    }
+
+    .query-bar {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .query-bar .query-info {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+      flex: 1;
+      min-width: 200px;
+    }
+
+    .query-bar .query-info code {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--accent-cyan);
+      background: var(--accent-cyan-dim);
+      padding: 2px 8px;
+      border-radius: 4px;
+    }
+
+    /* ========================================================================
+       FOOTER
+       ======================================================================== */
+    .footer {
+      text-align: center;
+      padding: 32px 0;
+      border-top: 1px solid var(--border-subtle);
+      margin-top: 40px;
+    }
+
+    .footer p {
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.7;
+    }
+
+    .footer a {
+      color: var(--accent-cyan);
+      text-decoration: none;
+      font-weight: 500;
+    }
+
+    .footer a:hover { text-decoration: underline; }
+
+    /* ========================================================================
+       ANIMATIONS
+       ======================================================================== */
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .animate-in {
+      animation: fadeInUp 0.5s ease-out forwards;
+      opacity: 0;
+    }
+
+    .animate-in.d1 { animation-delay: 0.05s; }
+    .animate-in.d2 { animation-delay: 0.12s; }
+    .animate-in.d3 { animation-delay: 0.20s; }
+    .animate-in.d4 { animation-delay: 0.28s; }
+    .animate-in.d5 { animation-delay: 0.36s; }
+
+    /* Spinner for loading */
+    .spinner {
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: inline-block;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* ========================================================================
+       TRANSACTION LOG SECTION
+       ======================================================================== */
+    .tx-log {
+      margin-top: 20px;
+      padding: 16px 20px;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--text-muted);
+      max-height: 160px;
+      overflow-y: auto;
+      line-height: 1.8;
+    }
+
+    .tx-log .log-entry {
+      padding: 2px 0;
+    }
+
+    .tx-log .log-entry .ts {
+      color: var(--text-muted);
+      margin-right: 8px;
+    }
+
+    .tx-log .log-entry.success { color: var(--accent-emerald); }
+    .tx-log .log-entry.info { color: var(--accent-cyan); }
+    .tx-log .log-entry.warn { color: var(--accent-amber); }
+    .tx-log .log-entry.error { color: var(--accent-rose); }
+
+    /* ========================================================================
+       FULL WIDTH
+       ======================================================================== */
+    .full-width { grid-column: 1 / -1; }
+
+    /* Scrollbar styling */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border-subtle); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+  </style>
+</head>
+
+<body>
+  <div class="grid-bg"></div>
+
+  <div class="app-container">
+
+    <!-- ===== TOP BAR ===== -->
+    <header class="top-bar animate-in d1" id="topBar">
+      <div class="brand">
+        <div class="brand-icon">Q</div>
+        <div class="brand-text">
+          <h1>Quantum</h1>
+          <span>Institutional RWA Terminal</span>
+        </div>
+      </div>
+      <div class="network-badge">
+        <span class="dot"></span>
+        <span id="networkLabel">Base Sepolia Testnet</span>
+      </div>
+    </header>
+
+    <!-- ===== WALLET CONNECTION ===== -->
+    <section class="wallet-section animate-in d2" id="walletSection">
+      <div class="card wallet-card">
+        <div class="wallet-info">
+          <div class="wallet-avatar" id="walletAvatar">🔒</div>
+          <div class="wallet-details">
+            <div class="label">Connected Wallet</div>
+            <div class="address disconnected" id="walletAddress">Not connected</div>
+          </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+          <span class="status-chip disconnected" id="statusChip">
+            <span>●</span> Disconnected
+          </span>
+          <button class="btn btn-primary" id="connectBtn" onclick="connectWallet()">
+            ⬡ Connect MetaMask
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== QUERY ACTION BAR ===== -->
+    <section class="query-section animate-in d3" id="querySection">
+      <div class="card">
+        <div class="section-header">
+          <div class="icon-box" style="background:var(--accent-emerald-dim); color:var(--accent-emerald);">⛓</div>
+          <h2>On-Chain Data Resolver</h2>
+          <span class="tag" style="background:var(--accent-emerald-dim); color:var(--accent-emerald);">LIVE READ</span>
+        </div>
+        <div class="query-bar">
+          <p class="query-info">
+            Fetch the institutional token metadata and financial snapshot directly from the smart contract at
+            <code id="contractBadge">Loading…</code>
+            by calling <code>tokenURI(0)</code> and <code>getFinancialSnapshot(0)</code>.
+          </p>
+          <button class="btn btn-query" id="queryBtn" onclick="queryBlockchain()">
+            <span id="queryBtnContent">🔎 Query Blockchain State</span>
+          </button>
+        </div>
+
+        <!-- Transaction Log Console -->
+        <div class="tx-log" id="txLog">
+          <div class="log-entry info"><span class="ts">[INIT]</span> Quantum On-Chain Terminal initialized. Awaiting user action…</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== MAIN DATA GRID ===== -->
+    <div class="main-grid" id="mainGrid">
+
+      <!-- Token Metadata Card -->
+      <section class="card animate-in d4" id="metaCard">
+        <div class="section-header">
+          <div class="icon-box" style="background:var(--accent-cyan-dim); color:var(--accent-cyan);">📋</div>
+          <h2>Token Metadata</h2>
+          <span class="tag" style="background:var(--accent-cyan-dim); color:var(--accent-cyan);">ERC-721</span>
+        </div>
+
+        <div id="metaContent">
+          <div class="empty-state">
+            <div class="empty-icon">📄</div>
+            <p>Click <strong>"Query Blockchain State"</strong> to read token metadata from the on-chain URI.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Financial Snapshot Card -->
+      <section class="card animate-in d5" id="finCard">
+        <div class="section-header">
+          <div class="icon-box" style="background:var(--accent-violet-dim); color:var(--accent-violet);">📊</div>
+          <h2>Financial Snapshot</h2>
+          <span class="tag" style="background:var(--accent-violet-dim); color:var(--accent-violet);">ON-CHAIN</span>
+        </div>
+
+        <div id="finContent">
+          <div class="empty-state">
+            <div class="empty-icon">🔐</div>
+            <p>Financial indicators stored immutably on Base Sepolia. Query the contract to reveal them.</p>
+          </div>
+        </div>
+      </section>
+
+    </div>
+
+    <!-- ===== FOOTER ===== -->
+    <footer class="footer">
+      <p>
+        Quantum Institutional RWA Terminal &middot; 100% On-Chain POC<br />
+        All data resolves from <a href="https://sepolia.basescan.org" target="_blank" rel="noopener">Base Sepolia</a> via public RPC &middot; Zero APIs &middot; Zero Servers
+      </p>
+    </footer>
+
+  </div>
+
+  <!-- ======================================================================
+       APPLICATION LOGIC — PURE WEB3
+       ====================================================================== -->
+  <script>
+    // =====================================================================
+    // CONFIGURATION
+    // =====================================================================
+
+    // Deployed on Base Sepolia Testnet
+    const CONTRACT_ADDRESS = "0xCbE0F785EDc2d823a44d5DB44C8099407000B843";
+
+    // Base Sepolia Public RPC
+    const RPC_URL = "https://sepolia.base.org";
+
+    // Minimal ABI — only the two read functions we need
+    const CONTRACT_ABI = [
+      // tokenURI(uint256 tokenId) → string
+      "function tokenURI(uint256 tokenId) view returns (string)",
+      // getFinancialSnapshot(uint256 tokenId) → tuple
+      "function getFinancialSnapshot(uint256 tokenId) view returns (tuple(string assetId, uint256 netOperatingIncome, uint256 occupancyRate, uint256 dscr, uint256 cashflow, uint256 lastVerifiedTimestamp))"
+    ];
+
+    // =====================================================================
+    // STATE
+    // =====================================================================
+    let connectedAddress = null;
+    let provider = null;
+    let signer = null;
+
+    // Initialize the contract badge
+    document.addEventListener("DOMContentLoaded", () => {
+      const badge = document.getElementById("contractBadge");
+      if (CONTRACT_ADDRESS === "0x0000000000000000000000000000000000000000") {
+        badge.textContent = "⚠️ Set CONTRACT_ADDRESS";
+        badge.style.color = "var(--accent-amber)";
+        badge.style.background = "var(--accent-amber-dim)";
+      } else {
+        badge.textContent = CONTRACT_ADDRESS.slice(0, 6) + "…" + CONTRACT_ADDRESS.slice(-4);
+      }
+    });
+
+    // =====================================================================
+    // LOGGING
+    // =====================================================================
+    function log(message, level = "info") {
+      const logEl = document.getElementById("txLog");
+      const ts = new Date().toLocaleTimeString("en-US", { hour12: false });
+      const entry = document.createElement("div");
+      entry.className = `log-entry ${level}`;
+      entry.innerHTML = `<span class="ts">[${ts}]</span> ${message}`;
+      logEl.appendChild(entry);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    // =====================================================================
+    // WALLET CONNECTION
+    // =====================================================================
+    async function connectWallet() {
+      const btn = document.getElementById("connectBtn");
+
+      if (!window.ethereum) {
+        log("MetaMask not detected. Using read-only RPC mode.", "warn");
+        provider = new ethers.JsonRpcProvider(RPC_URL);
+        updateWalletUI("Read-Only (RPC)", false);
+        log("Connected to Base Sepolia via public RPC endpoint.", "success");
+        return;
+      }
+
+      try {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Connecting…';
+        log("Requesting MetaMask connection…", "info");
+
+        provider = new ethers.BrowserProvider(window.ethereum);
+        signer = await provider.getSigner();
+        connectedAddress = await signer.getAddress();
+
+        // Check / switch to Base Sepolia (chainId 84532)
+        const network = await provider.getNetwork();
+        if (network.chainId !== 84532n) {
+          log("Wrong network detected. Switching to Base Sepolia (84532)…", "warn");
+          try {
+            await window.ethereum.request({
+              method: "wallet_switchEthereumChain",
+              params: [{ chainId: "0x14A34" }],
+            });
+          } catch (switchError) {
+            if (switchError.code === 4902) {
+              await window.ethereum.request({
+                method: "wallet_addEthereumChain",
+                params: [{
+                  chainId: "0x14A34",
+                  chainName: "Base Sepolia",
+                  nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 },
+                  rpcUrls: [RPC_URL],
+                  blockExplorerUrls: ["https://sepolia.basescan.org"],
+                }],
+              });
+            }
+          }
+          provider = new ethers.BrowserProvider(window.ethereum);
+          signer = await provider.getSigner();
+        }
+
+        updateWalletUI(connectedAddress, true);
+        log(`Wallet connected: ${connectedAddress.slice(0, 6)}…${connectedAddress.slice(-4)}`, "success");
+      } catch (err) {
+        log(`Connection failed: ${err.message}`, "error");
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = connectedAddress ? "✓ Connected" : "⬡ Connect MetaMask";
+      }
+    }
+
+    function updateWalletUI(address, isConnected) {
+      const avatar = document.getElementById("walletAvatar");
+      const addrEl = document.getElementById("walletAddress");
+      const chip = document.getElementById("statusChip");
+      const btn = document.getElementById("connectBtn");
+
+      if (isConnected || address === "Read-Only (RPC)") {
+        avatar.textContent = "🔓";
+        if (address === "Read-Only (RPC)") {
+          addrEl.textContent = "Read-Only Mode (No Wallet)";
+          addrEl.className = "address";
+        } else {
+          addrEl.textContent = address.slice(0, 6) + "…" + address.slice(-4);
+          addrEl.className = "address";
+        }
+        chip.className = "status-chip connected";
+        chip.innerHTML = "<span>●</span> " + (address === "Read-Only (RPC)" ? "RPC Connected" : "Connected");
+        btn.innerHTML = "✓ Connected";
+        btn.classList.remove("btn-primary");
+        btn.classList.add("btn-secondary");
+      }
+    }
+
+    // =====================================================================
+    // BLOCKCHAIN QUERY
+    // =====================================================================
+    async function queryBlockchain() {
+      const queryBtn = document.getElementById("queryBtn");
+      const queryBtnContent = document.getElementById("queryBtnContent");
+
+      if (CONTRACT_ADDRESS === "0x0000000000000000000000000000000000000000") {
+        log("⚠️ CONTRACT_ADDRESS is not set. Deploy the contract first and paste the address.", "error");
+        return;
+      }
+
+      // Ensure we have a provider
+      if (!provider) {
+        log("No provider available. Establishing read-only RPC connection…", "info");
+        provider = new ethers.JsonRpcProvider(RPC_URL);
+        updateWalletUI("Read-Only (RPC)", false);
+        log("Connected to Base Sepolia via public RPC.", "success");
+      }
+
+      queryBtn.disabled = true;
+      queryBtnContent.innerHTML = '<span class="spinner"></span> Querying…';
+
+      // Show skeletons
+      showSkeletons();
+
+      try {
+        const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
+
+        // === 1. Read Token URI ===
+        log("Calling tokenURI(0) on contract…", "info");
+        const tokenURIRaw = await contract.tokenURI(0);
+        log(`tokenURI(0) returned ${tokenURIRaw.length} chars`, "success");
+
+        let metadata;
+        try {
+          metadata = JSON.parse(tokenURIRaw);
+        } catch {
+          metadata = { raw: tokenURIRaw };
+        }
+
+        // === 2. Read Financial Snapshot ===
+        log("Calling getFinancialSnapshot(0) on contract…", "info");
+        const snapshot = await contract.getFinancialSnapshot(0);
+        log("Financial snapshot resolved from on-chain state ✓", "success");
+
+        // Parse values
+        const noi = Number(snapshot.netOperatingIncome);
+        const occupancy = Number(snapshot.occupancyRate);
+        const dscr = Number(snapshot.dscr);
+        const cashflow = Number(snapshot.cashflow);
+        const timestamp = Number(snapshot.lastVerifiedTimestamp);
+        const assetId = snapshot.assetId;
+
+        log(`Asset ID: ${assetId} | NOI: $${noi.toLocaleString()} | Occupancy: ${(occupancy / 100).toFixed(2)}% | DSCR: ${(dscr / 100).toFixed(2)}x | CF: $${cashflow.toLocaleString()}`, "success");
+
+        // === Render Metadata ===
+        renderMetadata(metadata);
+
+        // === Render Financial Data ===
+        renderFinancials({ noi, occupancy, dscr, cashflow, timestamp, assetId });
+
+      } catch (err) {
+        log(`Query failed: ${err.message}`, "error");
+        document.getElementById("metaContent").innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">❌</div>
+            <p>Failed to read from contract. Verify the address and that the contract is deployed on Base Sepolia.</p>
+          </div>`;
+        document.getElementById("finContent").innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">❌</div>
+            <p>${err.message}</p>
+          </div>`;
+      } finally {
+        queryBtn.disabled = false;
+        queryBtnContent.innerHTML = "🔎 Query Blockchain State";
+      }
+    }
+
+    // =====================================================================
+    // SKELETON LOADERS
+    // =====================================================================
+    function showSkeletons() {
+      document.getElementById("metaContent").innerHTML = `
+        <div style="padding: 8px 0;">
+          <div class="skeleton skeleton-line"></div>
+          <div class="skeleton skeleton-line medium"></div>
+          <div class="skeleton skeleton-line short"></div>
+          <div class="skeleton skeleton-line"></div>
+          <div class="skeleton skeleton-line medium"></div>
+        </div>`;
+
+      document.getElementById("finContent").innerHTML = `
+        <div class="financial-grid">
+          <div class="skeleton" style="height:110px;"></div>
+          <div class="skeleton" style="height:110px;"></div>
+          <div class="skeleton" style="height:110px;"></div>
+          <div class="skeleton" style="height:110px;"></div>
+        </div>`;
+    }
+
+    // =====================================================================
+    // RENDERERS
+    // =====================================================================
+    function renderMetadata(meta) {
+      const fields = [
+        { label: "Asset ID", value: meta.asset_id || meta.assetId || "—", highlight: true },
+        { label: "Ownership Share", value: meta.ownership || "—" },
+        { label: "Legal Vehicle", value: meta.legal_vehicle || meta.legalVehicle || "—" },
+        { label: "Last Verified", value: meta.last_verified || meta.lastVerified || "—" },
+        { label: "Data Resolver", value: meta.claira_endpoint || meta.clairaEndpoint || "—", highlight: true },
+      ];
+
+      const rows = fields.map(f => `
+        <tr>
+          <td class="field-label">${f.label}</td>
+          <td class="field-value ${f.highlight ? 'highlight' : ''}">${f.value}</td>
+        </tr>
+      `).join("");
+
+      document.getElementById("metaContent").innerHTML = `
+        <table class="meta-table">${rows}</table>`;
+
+      // Re-trigger animation
+      document.getElementById("metaCard").style.animation = "none";
+      requestAnimationFrame(() => {
+        document.getElementById("metaCard").style.animation = "";
+      });
+    }
+
+    function renderFinancials(data) {
+      const { noi, occupancy, dscr, cashflow, timestamp, assetId } = data;
+
+      const verifiedDate = new Date(timestamp * 1000);
+      const formattedDate = verifiedDate.toLocaleDateString("en-US", {
+        year: "numeric", month: "long", day: "numeric",
+      });
+      const formattedTime = verifiedDate.toLocaleTimeString("en-US", {
+        hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+      });
+
+      document.getElementById("finContent").innerHTML = `
+        <div class="financial-grid">
+          <div class="metric-card noi">
+            <div class="metric-label"><span class="metric-dot"></span> Net Operating Income</div>
+            <div class="metric-value">$${noi.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+            <div class="metric-sub">Annual NOI — Asset ${assetId}</div>
+          </div>
+          <div class="metric-card occ">
+            <div class="metric-label"><span class="metric-dot"></span> Occupancy Rate</div>
+            <div class="metric-value">${(occupancy / 100).toFixed(2)}%</div>
+            <div class="metric-sub">Current verified occupancy</div>
+          </div>
+          <div class="metric-card dscr">
+            <div class="metric-label"><span class="metric-dot"></span> DSCR</div>
+            <div class="metric-value">${(dscr / 100).toFixed(2)}x</div>
+            <div class="metric-sub">Debt Service Coverage Ratio</div>
+          </div>
+          <div class="metric-card cf">
+            <div class="metric-label"><span class="metric-dot"></span> Quarterly Cashflow</div>
+            <div class="metric-value">$${cashflow.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+            <div class="metric-sub">Current quarter net cashflow</div>
+          </div>
+        </div>
+
+        <div class="timestamp-bar">
+          <span class="ts-icon">✅</span>
+          <span>On-Chain Verification:</span>
+          <span class="ts-mono">${formattedDate} at ${formattedTime} UTC</span>
+          <span style="margin-left:auto; opacity:0.7;">Block Timestamp: ${timestamp}</span>
+        </div>`;
+    }
+  </script>
+</body>
+</html>
