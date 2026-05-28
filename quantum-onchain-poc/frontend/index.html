@@ -824,11 +824,17 @@
           <p class="query-info">
             Fetch the institutional token metadata and financial snapshot directly from the smart contract at
             <code id="contractBadge">Loading…</code>
-            by calling <code>tokenURI(0)</code> and <code>getFinancialSnapshot(0)</code>.
           </p>
-          <button class="btn btn-query" id="queryBtn" onclick="queryBlockchain()">
-            <span id="queryBtnContent">🔎 Query Blockchain State</span>
-          </button>
+          <div style="display:flex; gap:12px; align-items:center;">
+            <select id="tokenIdSelect" style="padding:10px 16px; border-radius:8px; border:1px solid var(--border-subtle); background:var(--bg-card); color:var(--text-primary); font-family:var(--font-mono); font-size:13px; outline:none;">
+              <option value="1">Token 1 (QM1-001 Hotel Feeling)</option>
+              <option value="2">Token 2 (QM1-002 Plaza Comercial Alcala)</option>
+              <option value="3">Token 3 (QM1-003 Bodega Industrial JHC)</option>
+            </select>
+            <button class="btn btn-query" id="queryBtn" onclick="queryBlockchain()">
+              <span id="queryBtnContent">🔎 Query Blockchain State</span>
+            </button>
+          </div>
         </div>
 
         <!-- Transaction Log Console -->
@@ -1050,11 +1056,12 @@
 
       try {
         const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
+        const tokenId = document.getElementById("tokenIdSelect").value;
 
         // === 1. Read Token URI ===
-        log("Calling tokenURI(0) on contract…", "info");
-        const tokenURIRaw = await contract.tokenURI(0);
-        log(`tokenURI(0) returned ${tokenURIRaw.length} chars`, "success");
+        log(`Calling tokenURI(${tokenId}) on contract…`, "info");
+        const tokenURIRaw = await contract.tokenURI(tokenId);
+        log(`tokenURI(${tokenId}) returned ${tokenURIRaw.length} chars`, "success");
 
         let metadata;
         try {
@@ -1064,8 +1071,8 @@
         }
 
         // === 2. Read Financial Snapshot ===
-        log("Calling getFinancialSnapshot(0) on contract…", "info");
-        const snapshot = await contract.getFinancialSnapshot(0);
+        log(`Calling getFinancialSnapshot(${tokenId}) on contract…`, "info");
+        const snapshot = await contract.getFinancialSnapshot(tokenId);
         log("Financial snapshot resolved from on-chain state ✓", "success");
 
         // Parse values
